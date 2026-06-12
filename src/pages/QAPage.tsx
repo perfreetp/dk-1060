@@ -7,19 +7,22 @@ import {
   ThumbsUp,
   CheckCircle2,
   Send,
-  X
+  X,
+  FileText,
+  Sparkles
 } from 'lucide-react';
 import { useAppStore } from '../store';
 import { Question } from '../types';
 
 export function QAPage() {
-  const { getQuestions, addQuestion, addAnswer, adoptAnswer, currentUser } = useAppStore();
+  const { getQuestions, addQuestion, addAnswer, adoptAnswer, convertToEntry, currentUser } = useAppStore();
   const [showAskModal, setShowAskModal] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [newQuestionTitle, setNewQuestionTitle] = useState('');
   const [newQuestionContent, setNewQuestionContent] = useState('');
   const [newAnswer, setNewAnswer] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'answered'>('all');
+  const [showConvertModal, setShowConvertModal] = useState(false);
 
   const questions = getQuestions();
 
@@ -29,6 +32,10 @@ export function QAPage() {
     if (filterStatus === 'answered') return q.status === 'answered' || q.status === 'adopted';
     return true;
   });
+
+  const currentQuestion = selectedQuestion 
+    ? questions.find(q => q.id === selectedQuestion.id) || selectedQuestion
+    : null;
 
   const handleAskQuestion = () => {
     if (!newQuestionTitle || !newQuestionContent) return;
@@ -42,11 +49,28 @@ export function QAPage() {
     if (!newAnswer || !selectedQuestion) return;
     addAnswer(selectedQuestion.id, newAnswer);
     setNewAnswer('');
+    const updatedQuestions = getQuestions();
+    const updatedQuestion = updatedQuestions.find(q => q.id === selectedQuestion.id);
+    if (updatedQuestion) {
+      setSelectedQuestion(updatedQuestion);
+    }
   };
 
   const handleAdoptAnswer = (answerId: string) => {
     if (!selectedQuestion) return;
     adoptAnswer(selectedQuestion.id, answerId);
+    const updatedQuestions = getQuestions();
+    const updatedQuestion = updatedQuestions.find(q => q.id === selectedQuestion.id);
+    if (updatedQuestion) {
+      setSelectedQuestion(updatedQuestion);
+    }
+  };
+
+  const handleConvertToEntry = () => {
+    if (!selectedQuestion) return;
+    convertToEntry(selectedQuestion.id);
+    setShowConvertModal(false);
+    setSelectedQuestion(null);
   };
 
   const getStatusBadge = (status: string) => {
@@ -210,43 +234,54 @@ export function QAPage() {
         </div>
       )}
 
-      {selectedQuestion && (
+      {currentQuestion && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">{selectedQuestion.title}</h2>
-                {getStatusBadge(selectedQuestion.status)}
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-bold text-gray-900">{currentQuestion.title}</h2>
+                {getStatusBadge(currentQuestion.status)}
               </div>
-              <button
-                onClick={() => setSelectedQuestion(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+              <div className="flex items-center gap-2">
+                {currentQuestion.status === 'adopted' && currentQuestion.answers?.some(a => a.adopted) && (
+                  <button
+                    onClick={() => setShowConvertModal(true)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-purple-600 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    生成词条
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedQuestion(null)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-6">
               <div className="mb-6">
-                <p className="text-gray-600">{selectedQuestion.content}</p>
+                <p className="text-gray-600">{currentQuestion.content}</p>
                 <div className="flex items-center gap-4 mt-4 text-sm text-gray-500">
                   <div className="flex items-center gap-1">
                     <User className="w-4 h-4" />
-                    <span>{selectedQuestion.author?.name || '匿名'}</span>
+                    <span>{currentQuestion.author?.name || '匿名'}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
-                    <span>{new Date(selectedQuestion.created_at).toLocaleDateString()}</span>
+                    <span>{new Date(currentQuestion.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
               </div>
 
               <div className="border-t border-gray-100 pt-6">
                 <h3 className="font-semibold text-gray-900 mb-4">
-                  {selectedQuestion.answers?.length || 0} 个回答
+                  {currentQuestion.answers?.length || 0} 个回答
                 </h3>
                 <div className="space-y-4">
-                  {selectedQuestion.answers?.map(answer => (
+                  {currentQuestion.answers?.map(answer => (
                     <div
                       key={answer.id}
                       className={`p-4 rounded-xl ${
@@ -274,7 +309,7 @@ export function QAPage() {
                           </div>
                         )}
                       </div>
-                      {!answer.adopted && selectedQuestion.status !== 'adopted' && (
+                      {!answer.adopted && currentQuestion.status !== 'adopted' && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -289,7 +324,7 @@ export function QAPage() {
                     </div>
                   ))}
 
-                  {!selectedQuestion.answers?.length && (
+                  {!currentQuestion.answers?.length && (
                     <div className="text-center py-8 text-gray-500">
                       <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
                       <p>暂无回答，快来抢沙发吧！</p>
@@ -324,6 +359,41 @@ export function QAPage() {
                   }`}
                 >
                   <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConvertModal && currentQuestion && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-8 h-8 text-purple-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">生成词条</h3>
+              <p className="text-gray-600 mb-6">
+                将此问答采纳内容转换为知识词条，便于更多人查阅学习
+              </p>
+              <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
+                <div className="text-sm text-gray-500 mb-2">问题</div>
+                <div className="text-gray-900 font-medium">{currentQuestion.title}</div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConvertModal(false)}
+                  className="btn-secondary flex-1"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleConvertToEntry}
+                  className="btn-primary flex-1 flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  确认生成
                 </button>
               </div>
             </div>
